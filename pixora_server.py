@@ -49,6 +49,7 @@ AUTH_SECRET = os.environ.get("PIXORA_AUTH_SECRET", ADMIN_KEY)
 GOOGLE_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 ADMIN_EMAILS = [e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()]
+ADMIN_PHONES = [re.sub(r"\D", "", p) for p in os.environ.get("ADMIN_PHONES", "").split(",") if p.strip()]
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
@@ -116,12 +117,16 @@ def bearer(authorization: str) -> Optional[dict]:
 
 
 def require_admin(key: str, authorization: str) -> None:
+    """Publishing needs either the admin key or a signed-in admin phone/email."""
     if key and key == ADMIN_KEY:
         return
     user = bearer(authorization)
-    if user and (not ADMIN_EMAILS or user.get("email", "").lower() in ADMIN_EMAILS):
-        return
-    raise HTTPException(status_code=401, detail="admin key or admin login required")
+    if user:
+        email = (user.get("email") or "").lower()
+        phone = re.sub(r"\D", "", user.get("phone") or "")
+        if (email and email in ADMIN_EMAILS) or (phone and phone in ADMIN_PHONES):
+            return
+    raise HTTPException(status_code=401, detail="admin key or admin phone required")
 
 
 # ---------------------------------------------------------------- models

@@ -25,6 +25,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import time
 import urllib.parse
@@ -83,7 +84,8 @@ def _unb64(text: str) -> bytes:
 def make_token(user: dict, days: int = 30) -> str:
     payload = {
         "sub": user["id"],
-        "email": user["email"],
+        "email": user.get("email", ""),
+        "phone": user.get("phone", ""),
         "name": user.get("name", ""),
         "picture": user.get("picture", ""),
         "exp": int(time.time()) + days * 86400,
@@ -123,6 +125,11 @@ def require_admin(key: str, authorization: str) -> None:
 
 
 # ---------------------------------------------------------------- models
+class PhoneLogin(BaseModel):
+    name: str = ""
+    phone: str = ""
+
+
 class NewWallpaper(BaseModel):
     title: str
     category: str = "Other"
@@ -259,6 +266,30 @@ def auth_callback(request: Request, code: str = "", error: str = ""):
     ))
 
 
+@app.post("/auth/phone")
+def auth_phone(body: PhoneLogin):
+    """Name + phone sign-in. No OTP for now: the number is the account id."""
+    phone = re.sub(r"\D", "", body.phone or "")
+    if len(phone) < 8:
+        raise HTTPException(status_code=400, detail="enter a valid phone number")
+    name = (body.name or "").strip()[:40] or "Pixora user"
+    users = load(USERS_FILE)
+    user = next((u for u in users if u.get("phone") == phone), None)
+    if not user:
+        user = {
+            "id": uuid.uuid4().hex[:12],
+            "phone": phone,
+            "name": name,
+            "email": "",
+            "created": int(time.time()),
+        }
+        users.append(user)
+    else:
+        user["name"] = name
+    save(USERS_FILE, users)
+    return {"token": make_token(user), "user": user}
+
+
 @app.get("/auth/me")
 def auth_me(authorization: str = Header(default="")):
     user = bearer(authorization)
@@ -270,7 +301,7 @@ def auth_me(authorization: str = Header(default="")):
 @app.get("/users", response_class=HTMLResponse)
 def users_page():
     rows = "".join(
-        f"<li>{u.get('name','')} — {u.get('email','')}</li>" for u in load(USERS_FILE)
+        f"<li>{u.get('name','')} — {u.get('phone') or u.get('email','')}</li>" for u in load(USERS_FILE)
     ) or "<li>No users yet</li>"
     return HTMLResponse(_page("Pixora users", f"<ul>{rows}</ul>"))
 

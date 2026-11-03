@@ -303,6 +303,13 @@ def auth_me(authorization: str = Header(default="")):
     return user
 
 
+@app.get("/users.json")
+def users_json(x_admin_key: str = Header(default=""), authorization: str = Header(default="")):
+    require_admin(x_admin_key, authorization)
+    users = sorted(load(USERS_FILE), key=lambda u: u.get("created", 0), reverse=True)
+    return {"users": users, "count": len(users)}
+
+
 @app.get("/users", response_class=HTMLResponse)
 def users_page():
     rows = "".join(

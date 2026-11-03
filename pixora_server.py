@@ -44,6 +44,7 @@ DATA_DIR = Path(os.environ.get("PIXORA_DATA", "./pixora_data"))
 IMAGE_DIR = DATA_DIR / "images"
 DB_FILE = DATA_DIR / "wallpapers.json"
 USERS_FILE = DATA_DIR / "users.json"
+CAT_FILE = DATA_DIR / "categories.json"
 ADMIN_KEY = os.environ.get("PIXORA_ADMIN_KEY", "change-me")
 AUTH_SECRET = os.environ.get("PIXORA_AUTH_SECRET", ADMIN_KEY)
 GOOGLE_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
@@ -301,6 +302,42 @@ def auth_me(authorization: str = Header(default="")):
     if not user:
         raise HTTPException(status_code=401, detail="not signed in")
     return user
+
+
+class NewCategory(BaseModel):
+    name: str
+
+
+@app.get("/categories")
+def list_categories():
+    return {"categories": load(CAT_FILE)}
+
+
+@app.post("/categories")
+def add_category(body: NewCategory, x_admin_key: str = Header(default=""),
+                 authorization: str = Header(default="")):
+    require_admin(x_admin_key, authorization)
+    name = (body.name or "").strip()[:24]
+    if not name:
+        raise HTTPException(status_code=400, detail="name required")
+    cats = load(CAT_FILE)
+    if any((c.get("name") or "").lower() == name.lower() for c in cats):
+        raise HTTPException(status_code=409, detail="already exists")
+    cats.append({"name": name, "created": int(time.time())})
+    save(CAT_FILE, cats)
+    return {"categories": cats}
+
+
+@app.delete("/categories/{name}")
+def delete_category(name: str, x_admin_key: str = Header(default=""),
+                    authorization: str = Header(default="")):
+    require_admin(x_admin_key, authorization)
+    cats = load(CAT_FILE)
+    keep = [c for c in cats if (c.get("name") or "").lower() != name.lower()]
+    if len(keep) == len(cats):
+        raise HTTPException(status_code=404, detail="not found")
+    save(CAT_FILE, keep)
+    return {"categories": keep}
 
 
 @app.get("/users.json")

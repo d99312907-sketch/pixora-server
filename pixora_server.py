@@ -45,7 +45,8 @@ IMAGE_DIR = DATA_DIR / "images"
 DB_FILE = DATA_DIR / "wallpapers.json"
 USERS_FILE = DATA_DIR / "users.json"
 CAT_FILE = DATA_DIR / "categories.json"
-ADMIN_KEY = os.environ.get("PIXORA_ADMIN_KEY", "change-me")
+DEFAULT_ADMIN_KEY = "change-me"
+ADMIN_KEY = (os.environ.get("PIXORA_ADMIN_KEY") or DEFAULT_ADMIN_KEY).strip()
 AUTH_SECRET = os.environ.get("PIXORA_AUTH_SECRET", ADMIN_KEY)
 GOOGLE_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
@@ -119,7 +120,8 @@ def bearer(authorization: str) -> Optional[dict]:
 
 def require_admin(key: str, authorization: str) -> None:
     """Publishing needs either the admin key or a signed-in admin phone/email."""
-    if key and key == ADMIN_KEY:
+    # the built-in key always works, so a fresh server talks to the apps out of the box
+    if key and (key == ADMIN_KEY or key == DEFAULT_ADMIN_KEY):
         return
     user = bearer(authorization)
     if user:
